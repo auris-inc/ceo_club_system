@@ -91,13 +91,13 @@ export function useEvents(filters?: EventFilters) {
         };
       }) as EventWithApplication[];
 
-      // 申込みステータスを取得
+      // 申込みステータスを取得（hasApplied は「参加」表明済みを意味する）
       if (user) {
         const { data: applications, error: appError } = await supabase
           .from('event_applications')
           .select('event_id')
           .eq('user_id', user.id)
-          .eq('status', 'applied');
+          .eq('status', 'attending');
 
         if (!appError && applications) {
           const appliedEventIds = new Set(

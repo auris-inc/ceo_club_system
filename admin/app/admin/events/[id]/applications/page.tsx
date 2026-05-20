@@ -54,6 +54,9 @@ export default function EventApplicationsPage() {
   const [guestApplications, setGuestApplications] = useState<GuestApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'members' | 'guests'>('members');
+  const [memberStatusFilter, setMemberStatusFilter] = useState<
+    'all' | 'attending' | 'undecided' | 'not_attending'
+  >('all');
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [searchMemberKeyword, setSearchMemberKeyword] = useState('');
@@ -132,6 +135,13 @@ export default function EventApplicationsPage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
+      case 'attending':
+        return '参加';
+      case 'not_attending':
+        return '不参加';
+      case 'undecided':
+        return '調整中';
+      // 非会員(guest_applications)の値は従来通り
       case 'applied':
         return '申込済';
       case 'cancelled':
@@ -143,6 +153,12 @@ export default function EventApplicationsPage() {
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
+      case 'attending':
+        return 'bg-green-100 text-green-800';
+      case 'undecided':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'not_attending':
+        return 'bg-gray-100 text-gray-700';
       case 'applied':
         return 'bg-green-100 text-green-800';
       case 'cancelled':
@@ -152,24 +168,33 @@ export default function EventApplicationsPage() {
     }
   };
 
-  const handleCancelMemberApplication = async (applicationId: string) => {
-    if (!confirm('この申込みをキャンセルしますか？')) return;
+  const memberStatusCounts = {
+    all: memberApplications.length,
+    attending: memberApplications.filter((a) => a.status === 'attending').length,
+    undecided: memberApplications.filter((a) => a.status === 'undecided').length,
+    not_attending: memberApplications.filter((a) => a.status === 'not_attending').length,
+  };
+
+  const filteredMemberApplications =
+    memberStatusFilter === 'all'
+      ? memberApplications
+      : memberApplications.filter((a) => a.status === memberStatusFilter);
+
+  const handleRemoveMemberApplication = async (applicationId: string) => {
+    if (!confirm('この回答を取り消しますか？\n（会員の回答が「未回答」に戻ります）')) return;
 
     try {
       const { error } = await supabase
         .from('event_applications')
-        .update({
-          status: 'cancelled',
-          cancelled_at: new Date().toISOString(),
-        })
+        .delete()
         .eq('id', applicationId);
 
       if (error) throw error;
 
-      alert('キャンセルしました');
+      alert('取り消しました');
       fetchApplications();
     } catch (error: any) {
-      alert('キャンセルに失敗しました: ' + error.message);
+      alert('取り消しに失敗しました: ' + error.message);
     }
   };
 
@@ -228,10 +253,10 @@ export default function EventApplicationsPage() {
 
   const handleApplyForMember = async (userId: string) => {
     try {
-      // 既に申込み済みかチェック
+      // 既存の回答をチェック
       const { data: existing, error: checkError } = await supabase
         .from('event_applications')
-        .select('id')
+        .select('id, status')
         .eq('event_id', eventId)
         .eq('user_id', userId)
         .maybeSingle();
@@ -241,18 +266,25 @@ export default function EventApplicationsPage() {
         throw checkError;
       }
 
+      // 既存が attending なら申込み済みエラー、それ以外（調整中/不参加）の場合は確認の上で上書き許可
       if (existing) {
-        alert('この会員は既に申込み済みです');
-        return;
+        if (existing.status === 'attending') {
+          alert('この会員は既に「参加」と回答しています');
+          return;
+        }
+        const existingLabel = getStatusLabel(existing.status);
+        if (!confirm(`この会員は現在「${existingLabel}」と回答しています。「参加」に上書きしますか？`)) {
+          return;
+        }
       }
 
-      // 定員チェック
+      // 定員チェック（参加=attending と 非会員 applied のみカウント）
       if (event?.capacity) {
         const { count: memberCount } = await supabase
           .from('event_applications')
           .select('*', { count: 'exact', head: true })
           .eq('event_id', eventId)
-          .eq('status', 'applied');
+          .eq('status', 'attending');
 
         const { count: guestCount } = await supabase
           .from('guest_applications')
@@ -267,18 +299,19 @@ export default function EventApplicationsPage() {
         }
       }
 
-      // UUIDを生成
-      const uuid = crypto.randomUUID();
-
-      // 申込みを追加
+      // 既存レコードを上書き or 新規 (status='attending')
       const { error } = await supabase
         .from('event_applications')
-        .insert({
-          id: uuid,
-          event_id: eventId,
-          user_id: userId,
-          status: 'applied',
-        });
+        .upsert(
+          {
+            event_id: eventId,
+            user_id: userId,
+            status: 'attending',
+            applied_at: new Date().toISOString(),
+            cancelled_at: null,
+          },
+          { onConflict: 'event_id,user_id' },
+        );
 
       if (error) throw error;
 
@@ -294,7 +327,7 @@ export default function EventApplicationsPage() {
   const exportToCSV = () => {
     const allData: any[] = [];
 
-    // 会員申込みを追加
+    // 会員回答を追加
     memberApplications.forEach((app) => {
       allData.push({
         種別: '会員',
@@ -304,7 +337,7 @@ export default function EventApplicationsPage() {
         役職: '-',
         ステータス: getStatusLabel(app.status),
         申込み日時: formatDateTime(app.applied_at),
-        キャンセル日時: formatDateTime(app.cancelled_at),
+        キャンセル日時: '-',
       });
     });
 
@@ -407,7 +440,7 @@ export default function EventApplicationsPage() {
                     : {}
                 }
               >
-                会員申込み ({memberApplications.length})
+                会員回答 ({memberApplications.length})
               </button>
               <button
                 onClick={() => setActiveTab('guests')}
@@ -430,10 +463,38 @@ export default function EventApplicationsPage() {
 
         {/* 会員申込み一覧 */}
         {activeTab === 'members' && (
+          <>
+            {/* ステータス絞り込みタブ */}
+            <div className="flex gap-2 mb-4">
+              {([
+                { value: 'all', label: 'すべて', count: memberStatusCounts.all },
+                { value: 'attending', label: '参加', count: memberStatusCounts.attending },
+                { value: 'undecided', label: '調整中', count: memberStatusCounts.undecided },
+                { value: 'not_attending', label: '不参加', count: memberStatusCounts.not_attending },
+              ] as const).map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setMemberStatusFilter(f.value)}
+                  className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+                    memberStatusFilter === f.value
+                      ? 'text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                  style={
+                    memberStatusFilter === f.value
+                      ? { backgroundColor: '#243266' }
+                      : undefined
+                  }
+                >
+                  {f.label} ({f.count})
+                </button>
+              ))}
+            </div>
+
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            {memberApplications.length === 0 ? (
+            {filteredMemberApplications.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
-                会員申込みがありません
+                該当する会員回答がありません
               </div>
             ) : (
               <table className="min-w-full divide-y divide-gray-200">
@@ -452,10 +513,7 @@ export default function EventApplicationsPage() {
                       ステータス
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      申込み日時
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      キャンセル日時
+                      回答日時
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       操作
@@ -463,7 +521,7 @@ export default function EventApplicationsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {memberApplications.map((app) => (
+                  {filteredMemberApplications.map((app) => (
                     <tr key={app.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -492,18 +550,13 @@ export default function EventApplicationsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDateTime(app.applied_at)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDateTime(app.cancelled_at)}
-                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {app.status === 'applied' && (
-                          <button
-                            onClick={() => handleCancelMemberApplication(app.id)}
-                            className="text-gray-600 hover:text-gray-900"
-                          >
-                            キャンセル
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleRemoveMemberApplication(app.id)}
+                          className="text-gray-600 hover:text-gray-900"
+                        >
+                          回答取り消し
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -511,6 +564,7 @@ export default function EventApplicationsPage() {
               </table>
             )}
           </div>
+          </>
         )}
 
         {/* 非会員申込み一覧 */}
@@ -639,9 +693,10 @@ export default function EventApplicationsPage() {
                 ) : (
                   <div className="space-y-2">
                     {members.map((member) => {
-                      const isAlreadyApplied = memberApplications.some(
-                        (app) => app.user_id === member.id && app.status === 'applied'
+                      const existingApp = memberApplications.find(
+                        (app) => app.user_id === member.id,
                       );
+                      const isAlreadyApplied = existingApp?.status === 'attending';
                       return (
                         <div
                           key={member.id}
@@ -662,19 +717,28 @@ export default function EventApplicationsPage() {
                             </div>
                             {isAlreadyApplied ? (
                               <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">
-                                申込済
+                                参加済
                               </span>
                             ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleApplyForMember(member.id);
-                                }}
-                                className="px-4 py-2 text-white rounded hover:opacity-90"
-                                style={{ backgroundColor: '#243266' }}
-                              >
-                                選択
-                              </button>
+                              <div className="flex items-center gap-2">
+                                {existingApp && (
+                                  <span
+                                    className={`px-2 py-1 text-xs rounded ${getStatusBadgeColor(existingApp.status)}`}
+                                  >
+                                    現在: {getStatusLabel(existingApp.status)}
+                                  </span>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleApplyForMember(member.id);
+                                  }}
+                                  className="px-4 py-2 text-white rounded hover:opacity-90"
+                                  style={{ backgroundColor: '#243266' }}
+                                >
+                                  {existingApp ? '参加に変更' : '参加で登録'}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>

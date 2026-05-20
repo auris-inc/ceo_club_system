@@ -76,7 +76,7 @@ export default function GuestApplyPage() {
           .from('event_applications')
           .select('*', { count: 'exact', head: true })
           .eq('event_id', eventId)
-          .eq('status', 'applied');
+          .eq('status', 'attending');
 
         const totalApplications = (count || 0) + (memberCount || 0);
         if (totalApplications >= event.capacity) {

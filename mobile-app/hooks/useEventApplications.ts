@@ -36,12 +36,12 @@ export function useEventApplications(filters?: ApplicationFilters) {
       setLoading(true);
       setError(null);
 
-      // 申込みを取得
+      // 申込みを取得（参加表明＝attending のみ）
       let query = supabase
         .from('event_applications')
         .select('*, events(*)')
         .eq('user_id', user.id)
-        .eq('status', 'applied')
+        .eq('status', 'attending')
         .order('applied_at', { ascending: false });
 
       const { data: applications, error: appError } = await query;

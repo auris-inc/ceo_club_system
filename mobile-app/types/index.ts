@@ -2,7 +2,7 @@ export type MemberStatus = 'pending' | 'active' | 'suspended' | 'rejected';
 export type Gender = 'male' | 'female' | 'other';
 export type EventStatus = 'draft' | 'published' | 'closed' | 'cancelled';
 export type NewsStatus = 'draft' | 'published' | 'archived';
-export type ApplicationStatus = 'applied' | 'cancelled';
+export type ApplicationStatus = 'attending' | 'not_attending' | 'undecided';
 
 export interface User {
   id: string;

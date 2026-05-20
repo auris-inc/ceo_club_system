@@ -12,10 +12,17 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../../lib/supabase';
-import { Event, EventApplication } from '../../../types';
+import { Event, EventApplication, ApplicationStatus } from '../../../types';
 import { useAuthStore } from '../../../stores/authStore';
-import * as Crypto from 'expo-crypto';
 import RenderHTML from 'react-native-render-html';
+
+const STATUS_LABELS: Record<ApplicationStatus, string> = {
+  attending: '参加',
+  not_attending: '不参加',
+  undecided: '調整中',
+};
+
+const STATUS_ORDER: ApplicationStatus[] = ['attending', 'undecided', 'not_attending'];
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,7 +31,7 @@ export default function EventDetailScreen() {
   const [application, setApplication] = useState<EventApplication | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [applying, setApplying] = useState(false);
+  const [submittingStatus, setSubmittingStatus] = useState<ApplicationStatus | null>(null);
 
   useEffect(() => {
     fetchEventDetail();
@@ -64,117 +71,47 @@ export default function EventDetailScreen() {
         .select('*')
         .eq('event_id', id)
         .eq('user_id', user.id)
-        .eq('status', 'applied')
-        .single();
+        .maybeSingle();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        // PGRST116はレコードが見つからないエラー（正常）
-        throw fetchError;
-      }
+      if (fetchError) throw fetchError;
 
-      if (data) {
-        setApplication(data as EventApplication);
-      }
+      setApplication((data as EventApplication) || null);
     } catch (err: any) {
       console.error('Error fetching application:', err);
     }
   };
 
-  const handleApply = async () => {
+  const handleSelectStatus = async (nextStatus: ApplicationStatus) => {
     if (!user || !event) return;
+    if (application?.status === nextStatus) return;
 
     try {
-      setApplying(true);
+      setSubmittingStatus(nextStatus);
 
-      // 既存の申込みレコード（キャンセル済み含む）をチェック
-      const { data: existing, error: checkError } = await supabase
+      const { data, error: upsertError } = await supabase
         .from('event_applications')
-        .select('id')
-        .eq('event_id', event.id)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        throw checkError;
-      }
-
-      let result;
-      if (existing) {
-        // 既存レコードがある場合は更新（キャンセル済みから再申込み）
-        const { data, error: updateError } = await supabase
-          .from('event_applications')
-          .update({
-            status: 'applied',
-            cancelled_at: null,
-            applied_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        result = data;
-      } else {
-        // 新規レコードの場合は挿入
-        const uuid = await Crypto.randomUUID();
-        const { data, error: insertError } = await supabase
-          .from('event_applications')
-          .insert({
-            id: uuid,
+        .upsert(
+          {
             event_id: event.id,
             user_id: user.id,
-            status: 'applied',
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        result = data;
-      }
-
-      setApplication(result as EventApplication);
-      Alert.alert('申し込み完了', 'イベントへの申し込みが完了しました');
-    } catch (err: any) {
-      console.error('Error applying to event:', err);
-      Alert.alert('エラー', err.message || '申し込みに失敗しました');
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const handleCancel = async () => {
-    if (!application) return;
-
-    Alert.alert(
-      'キャンセル確認',
-      'イベントへの申し込みをキャンセルしますか？',
-      [
-        { text: 'いいえ', style: 'cancel' },
-        {
-          text: 'はい',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: cancelError } = await supabase
-                .from('event_applications')
-                .update({
-                  status: 'cancelled',
-                  cancelled_at: new Date().toISOString(),
-                })
-                .eq('id', application.id);
-
-              if (cancelError) throw cancelError;
-
-              setApplication(null);
-              Alert.alert('キャンセル完了', '申し込みをキャンセルしました');
-            } catch (err: any) {
-              console.error('Error cancelling application:', err);
-              Alert.alert('エラー', err.message || 'キャンセルに失敗しました');
-            }
+            status: nextStatus,
+            applied_at: new Date().toISOString(),
+            cancelled_at: null,
           },
-        },
-      ]
-    );
+          { onConflict: 'event_id,user_id' },
+        )
+        .select()
+        .single();
+
+      if (upsertError) throw upsertError;
+
+      setApplication(data as EventApplication);
+    } catch (err: any) {
+      console.error('Error updating application status:', err);
+      Alert.alert('エラー', err.message || '更新に失敗しました');
+    } finally {
+      setSubmittingStatus(null);
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -188,13 +125,7 @@ export default function EventDetailScreen() {
     return `${hours}:${minutes}`;
   };
 
-  // HTMLをレンダリングするための設定
   const { width } = useWindowDimensions();
-
-  const canCancel = () => {
-    if (!event || !event.cancel_deadline) return false;
-    return new Date(event.cancel_deadline) > new Date();
-  };
 
   if (loading) {
     return (
@@ -218,8 +149,8 @@ export default function EventDetailScreen() {
     );
   }
 
-  const hasApplied = application !== null;
-  const canApply = !hasApplied && event.capacity && event.capacity > 0;
+  const currentStatus: ApplicationStatus | null =
+    (application?.status as ApplicationStatus) ?? null;
 
   return (
     <ScrollView style={styles.container}>
@@ -270,36 +201,42 @@ export default function EventDetailScreen() {
 
         {user && (
           <View style={styles.actionContainer}>
-            {hasApplied ? (
-              <>
-                <View style={styles.appliedBadge}>
-                  <Text style={styles.appliedText}>✓ 申し込み済み</Text>
-                </View>
-                {canCancel() && (
+            <Text style={styles.actionLabel}>参加可否</Text>
+            <View style={styles.statusButtonRow}>
+              {STATUS_ORDER.map((status) => {
+                const selected = currentStatus === status;
+                const isSubmitting = submittingStatus === status;
+                return (
                   <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={handleCancel}
+                    key={status}
+                    style={[
+                      styles.statusButton,
+                      selected && styles[`statusButton_${status}_selected`],
+                    ]}
+                    onPress={() => handleSelectStatus(status)}
+                    disabled={submittingStatus !== null}
+                    activeOpacity={0.7}
                   >
-                    <Text style={styles.cancelButtonText}>キャンセル</Text>
+                    {isSubmitting ? (
+                      <ActivityIndicator color={selected ? '#fff' : '#243266'} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.statusButtonText,
+                          selected && styles.statusButtonTextSelected,
+                        ]}
+                      >
+                        {STATUS_LABELS[status]}
+                      </Text>
+                    )}
                   </TouchableOpacity>
-                )}
-              </>
-            ) : canApply ? (
-              <TouchableOpacity
-                style={styles.applyButton}
-                onPress={handleApply}
-                disabled={applying}
-              >
-                <Text style={styles.applyButtonText}>
-                  {applying ? '申し込み中...' : 'このイベントに申し込む'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.unavailableBadge}>
-                <Text style={styles.unavailableText}>
-                  申し込みできません
-                </Text>
-              </View>
+                );
+              })}
+            </View>
+            {currentStatus && (
+              <Text style={styles.currentStatusHint}>
+                現在の回答: {STATUS_LABELS[currentStatus]}
+              </Text>
             )}
           </View>
         )}
@@ -379,49 +316,51 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
   },
-  applyButton: {
-    backgroundColor: '#243266',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  applyButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  actionLabel: {
+    fontSize: 14,
     fontWeight: '600',
-  },
-  appliedBadge: {
-    backgroundColor: '#e8f5e9',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
+    color: '#333',
     marginBottom: 12,
   },
-  appliedText: {
-    color: '#2e7d32',
-    fontSize: 16,
-    fontWeight: '600',
+  statusButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  cancelButton: {
-    backgroundColor: '#f5f5f5',
+  statusButton: {
+    flex: 1,
     borderRadius: 8,
-    padding: 16,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#d0d0d0',
+    backgroundColor: '#fff',
+    minHeight: 50,
   },
-  cancelButtonText: {
+  statusButton_attending_selected: {
+    backgroundColor: '#243266',
+    borderColor: '#243266',
+  },
+  statusButton_undecided_selected: {
+    backgroundColor: '#a8895b',
+    borderColor: '#a8895b',
+  },
+  statusButton_not_attending_selected: {
+    backgroundColor: '#7a7a7a',
+    borderColor: '#7a7a7a',
+  },
+  statusButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#555',
+  },
+  statusButtonTextSelected: {
+    color: '#fff',
+  },
+  currentStatusHint: {
+    marginTop: 12,
+    fontSize: 13,
     color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  unavailableBadge: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-  },
-  unavailableText: {
-    color: '#999',
-    fontSize: 16,
+    textAlign: 'center',
   },
 });
-
