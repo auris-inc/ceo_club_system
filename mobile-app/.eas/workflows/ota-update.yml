@@ -13,6 +13,7 @@ jobs:
   ota_update:
     name: Publish update to preview channel
     type: update
+    environment: preview
     params:
       branch: preview
       platform: all
