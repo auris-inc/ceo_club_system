@@ -60,6 +60,9 @@ export default function EventDetailPage() {
     publish_at: '',
     allow_guest: false,
   });
+  const [originalStatusId, setOriginalStatusId] = useState<string>('');
+  const [notifyOnUpdate, setNotifyOnUpdate] = useState(false);
+  const PUBLISHED_STATUS_ID = '00000000-0000-0000-0000-000000000202';
 
   useEffect(() => {
     // セッション確認
@@ -123,6 +126,7 @@ export default function EventDetailPage() {
       if (error) throw error;
 
       setEvent(data as any);
+      setOriginalStatusId(data.status_id || '');
       setFormData({
         title: data.title || '',
         body: data.body || '',
@@ -295,12 +299,52 @@ export default function EventDetailPage() {
         if (insertError) throw insertError;
       }
 
+      // 通知判定
+      // - 新規作成: 公開ステータスかつ notifyOnUpdate ON → event_published
+      // - 既存編集 + draft→published に変わった: 初公開とみなして event_published
+      // - 既存編集 + 既に公開済みで notifyOnUpdate ON → event_updated
+      const isPublished = formData.status_id === PUBLISHED_STATUS_ID;
+      let notifyKind: 'event_published' | 'event_updated' | null = null;
+      if (isPublished) {
+        if (isNew) {
+          if (notifyOnUpdate) notifyKind = 'event_published';
+        } else if (originalStatusId !== PUBLISHED_STATUS_ID) {
+          if (notifyOnUpdate) notifyKind = 'event_published';
+        } else if (notifyOnUpdate) {
+          notifyKind = 'event_updated';
+        }
+      }
+
+      let notifyResult = '';
+      if (notifyKind) {
+        try {
+          const sessionRaw = localStorage.getItem('admin_session') ?? '';
+          const res = await fetch('/api/admin/notifications', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-admin-session': btoa(unescape(encodeURIComponent(sessionRaw))),
+            },
+            body: JSON.stringify({ kind: notifyKind, eventId: savedEventId }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            notifyResult = `\n通知送信に失敗: ${json?.error ?? res.status}`;
+          } else {
+            notifyResult = `\n通知送信完了: ${json?.sent ?? 0}件`;
+          }
+        } catch (notifyErr: any) {
+          notifyResult = `\n通知送信エラー: ${notifyErr?.message ?? notifyErr}`;
+        }
+      }
+
       if (isNew) {
-        alert('イベントを作成しました');
+        alert('イベントを作成しました' + notifyResult);
         router.push(`/admin/events/${savedEventId}`);
       } else {
-        alert('保存しました');
+        alert('保存しました' + notifyResult);
         setEditMode(false);
+        setNotifyOnUpdate(false);
         fetchEvent();
       }
     } catch (error: any) {
@@ -641,6 +685,29 @@ export default function EventDetailPage() {
                   </span>
                 </label>
               </div>
+
+              {formData.status_id === PUBLISHED_STATUS_ID && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notifyOnUpdate}
+                      onChange={(e) => setNotifyOnUpdate(e.target.checked)}
+                      className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-2"
+                    />
+                    <span className="text-sm font-medium text-blue-900">
+                      {isNew || originalStatusId !== PUBLISHED_STATUS_ID
+                        ? '公開時に全会員へ通知する'
+                        : '変更を全会員へ通知する'}
+                    </span>
+                  </label>
+                  <p className="text-xs text-blue-700 mt-1 ml-6">
+                    {isNew || originalStatusId !== PUBLISHED_STATUS_ID
+                      ? '保存後、新規イベントとして全会員に Push 通知を送ります'
+                      : '保存後、イベント情報の更新を全会員に Push 通知で知らせます'}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

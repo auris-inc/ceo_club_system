@@ -34,6 +34,8 @@ function NewEventPageContent() {
     publish_at: '',
     allow_guest: false,
   });
+  const [notifyOnPublish, setNotifyOnPublish] = useState(true);
+  const PUBLISHED_STATUS_ID = '00000000-0000-0000-0000-000000000202';
 
   useEffect(() => {
     // セッション確認
@@ -232,7 +234,32 @@ function NewEventPageContent() {
         if (tagError) throw tagError;
       }
 
-      alert('イベントを作成しました');
+      // 公開ステータスかつ通知ONなら、全会員に Push 通知
+      const isPublished = formData.status_id === PUBLISHED_STATUS_ID;
+      let notifyResult = '';
+      if (isPublished && notifyOnPublish) {
+        try {
+          const sessionRaw = localStorage.getItem('admin_session') ?? '';
+          const res = await fetch('/api/admin/notifications', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-admin-session': btoa(unescape(encodeURIComponent(sessionRaw))),
+            },
+            body: JSON.stringify({ kind: 'event_published', eventId: data.id }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            notifyResult = `\n通知送信に失敗: ${json?.error ?? res.status}`;
+          } else {
+            notifyResult = `\n通知送信完了: ${json?.sent ?? 0}件`;
+          }
+        } catch (notifyErr: any) {
+          notifyResult = `\n通知送信エラー: ${notifyErr?.message ?? notifyErr}`;
+        }
+      }
+
+      alert('イベントを作成しました' + notifyResult);
       router.push(`/admin/events/${data.id}`);
     } catch (error: any) {
       console.error('Error creating event:', error);
@@ -518,6 +545,25 @@ function NewEventPageContent() {
                 </span>
               </label>
             </div>
+
+            {formData.status_id === PUBLISHED_STATUS_ID && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifyOnPublish}
+                    onChange={(e) => setNotifyOnPublish(e.target.checked)}
+                    className="w-4 h-4 text-gray-900 border-gray-300 rounded focus:ring-2"
+                  />
+                  <span className="text-sm font-medium text-blue-900">
+                    公開時に全会員へ通知する
+                  </span>
+                </label>
+                <p className="text-xs text-blue-700 mt-1 ml-6">
+                  作成成功後、Push通知を全会員に一斉送信します
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

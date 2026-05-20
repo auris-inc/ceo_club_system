@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/

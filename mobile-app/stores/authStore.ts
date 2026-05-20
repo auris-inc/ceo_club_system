@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { supabase } from '../lib/supabase';
+import { registerPushTokenForUser } from '../lib/pushNotifications';
 
 interface AuthState {
   user: User | null;
@@ -47,6 +48,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
           if (!error && userData) {
             set({ user: userData as User });
+          }
+
+          // ログイン成功時のみ Push Token を取得・保存
+          // (INITIAL_SESSION / TOKEN_REFRESHED ではスキップ)
+          if (event === 'SIGNED_IN') {
+            void registerPushTokenForUser(session.user.id);
           }
         } else {
           set({ user: null });
