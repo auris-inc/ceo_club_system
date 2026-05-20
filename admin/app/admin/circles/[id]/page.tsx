@@ -6,13 +6,21 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 
+type Category = 'district' | 'club';
+
 interface Circle {
   id: string;
   name: string;
+  category: Category;
   sort_order: number;
   is_active: boolean;
   created_at: string;
 }
+
+const CATEGORY_LABEL: Record<Category, string> = {
+  district: '地区会',
+  club: '部活動',
+};
 
 export default function CircleDetailPage() {
   const router = useRouter();
@@ -23,14 +31,19 @@ export default function CircleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    category: Category;
+    sort_order: number;
+    is_active: boolean;
+  }>({
     name: '',
+    category: 'club',
     sort_order: 0,
     is_active: true,
   });
 
   useEffect(() => {
-    // セッション確認
     const session = localStorage.getItem('admin_session');
     if (!session) {
       router.push('/admin/login');
@@ -51,15 +64,17 @@ export default function CircleDetailPage() {
 
       if (error) throw error;
 
-      setCircle(data);
+      const c = data as Circle;
+      setCircle(c);
       setFormData({
-        name: data.name,
-        sort_order: data.sort_order,
-        is_active: data.is_active,
+        name: c.name,
+        category: c.category,
+        sort_order: c.sort_order,
+        is_active: c.is_active,
       });
     } catch (error) {
       console.error('Error fetching circle:', error);
-      alert('サークル情報の取得に失敗しました');
+      alert('タグ情報の取得に失敗しました');
       router.push('/admin/circles');
     } finally {
       setLoading(false);
@@ -129,7 +144,7 @@ export default function CircleDetailPage() {
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-center text-gray-500">
-              サークルが見つかりませんでした
+              タグが見つかりませんでした
             </div>
           </div>
         </div>
@@ -143,7 +158,7 @@ export default function CircleDetailPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold" style={{ color: '#243266' }}>
-              サークル詳細
+              タグ詳細
             </h2>
             {!editMode && (
               <div className="flex gap-2">
@@ -167,10 +182,49 @@ export default function CircleDetailPage() {
           {editMode ? (
             <form onSubmit={handleSubmit}>
               <div className="space-y-6">
-                {/* サークル名 */}
+                {/* カテゴリー */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    サークル名 <span className="text-gray-500">*</span>
+                    カテゴリー <span className="text-gray-500">*</span>
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="category"
+                        value="district"
+                        checked={formData.category === 'district'}
+                        onChange={() =>
+                          setFormData({ ...formData, category: 'district' })
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-900">
+                        地区会（会員は最大2つまで選択可）
+                      </span>
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="category"
+                        value="club"
+                        checked={formData.category === 'club'}
+                        onChange={() =>
+                          setFormData({ ...formData, category: 'club' })
+                        }
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-900">
+                        部活動（上限なし）
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* タグ名 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    タグ名 <span className="text-gray-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -238,6 +292,7 @@ export default function CircleDetailPage() {
                       setEditMode(false);
                       setFormData({
                         name: circle.name,
+                        category: circle.category,
                         sort_order: circle.sort_order,
                         is_active: circle.is_active,
                       });
@@ -253,7 +308,16 @@ export default function CircleDetailPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  サークル名
+                  カテゴリー
+                </label>
+                <div className="text-gray-900">
+                  {CATEGORY_LABEL[circle.category]}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  タグ名
                 </label>
                 <div className="text-gray-900">{circle.name}</div>
               </div>
@@ -293,4 +357,3 @@ export default function CircleDetailPage() {
     </AdminLayout>
   );
 }
-

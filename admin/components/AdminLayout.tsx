@@ -51,7 +51,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { href: '/admin/events', label: 'イベント管理', icon: Calendar },
     { href: '/admin/news', label: 'お知らせ管理', icon: Megaphone },
     { href: '/admin/tags', label: 'タグ管理', icon: Tag },
-    { href: '/admin/circles', label: 'サークル管理', icon: Link2 },
+    { href: '/admin/circles', label: '会員タグ管理', icon: Link2 },
     { href: '/admin/administrators', label: '管理者管理', icon: UserCog },
   ];
 

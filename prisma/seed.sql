@@ -21,6 +21,21 @@ INSERT INTO event_statuses (id, name) VALUES
     ('00000000-0000-0000-0000-000000000204', 'cancelled')
 ON CONFLICT (name) DO NOTHING;
 
+-- 地区会タグの初期データ（circles テーブル・category='district'）
+-- 事務局のみ管理。会員は最大2つまで選択可。
+INSERT INTO circles (id, name, category, sort_order, is_active) VALUES
+    ('00000000-0000-0000-0000-000000000301', '下町会',       'district', 10, true),
+    ('00000000-0000-0000-0000-000000000302', '渋谷・山手会', 'district', 20, true),
+    ('00000000-0000-0000-0000-000000000303', '銀座会',       'district', 30, true),
+    ('00000000-0000-0000-0000-000000000304', '埼玉会',       'district', 40, true),
+    ('00000000-0000-0000-0000-000000000305', '吉祥寺会',     'district', 50, true),
+    ('00000000-0000-0000-0000-000000000306', '港区会',       'district', 60, true),
+    ('00000000-0000-0000-0000-000000000307', '新宿会',       'district', 70, true)
+ON CONFLICT (name) DO UPDATE SET
+    category   = EXCLUDED.category,
+    sort_order = EXCLUDED.sort_order,
+    is_active  = EXCLUDED.is_active;
+
 -- 既存のテストデータを削除
 DELETE FROM event_applications;
 DELETE FROM guest_applications;
@@ -176,6 +191,75 @@ BEGIN
             (NOW() - INTERVAL '20 days'),
             published_status_id,
             (NOW() - INTERVAL '30 days'),
+            true,
+            test_user_id
+        )
+        ON CONFLICT DO NOTHING;
+
+        -- テストイベント5: 2026年2月
+        INSERT INTO events (
+            id, title, body, thumbnail_url, event_date, start_time, end_time, venue, capacity,
+            cancel_deadline, status_id, publish_at, allow_guest, created_by
+        )
+        VALUES (
+            gen_random_uuid(),
+            'CEO倶楽部2月定例会（テスト）',
+            '<h1>CEO倶楽部2月定例会</h1><p>2月の定例CEO倶楽部会合です。会員の皆様の情報交換の場として開催いたします。</p><h2>議題</h2><ul><li>会員紹介・自己紹介タイム</li><li>ビジネストピックの共有</li><li>今後のイベント企画について</li><li>自由な情報交換・ネットワーキング</li></ul><h3>注意事項</h3><p><em>会員限定のイベントです。事前のご予約をお願いいたします。</em></p>',
+            'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&h=600&fit=crop',
+            DATE '2026-02-15',
+            '19:00:00',
+            '21:00:00',
+            '東京・六本木ヒルズ',
+            30,
+            DATE '2026-02-10',
+            published_status_id,
+            NOW(),
+            false,
+            test_user_id
+        )
+        ON CONFLICT DO NOTHING;
+
+        -- テストイベント6: 2026年3月
+        INSERT INTO events (
+            id, title, body, thumbnail_url, event_date, start_time, end_time, venue, capacity,
+            cancel_deadline, status_id, publish_at, allow_guest, created_by
+        )
+        VALUES (
+            gen_random_uuid(),
+            '経営者セミナー「春の戦略会議」（テスト）',
+            '<h1>経営者セミナー「春の戦略会議」</h1><p>新年度を迎える前に、経営戦略を見直すセミナーです。最新の事例と実践的なノウハウをお伝えします。</p><h2>セミナー内容</h2><ol><li>年度末振り返りと次年度計画</li><li>成功事例の紹介</li><li>質疑応答・ディスカッション</li></ol><p>詳細はお申し込み後ご案内いたします。</p>',
+            'https://images.unsplash.com/photo-1551434678-e076c223a692?w=800&h=600&fit=crop',
+            DATE '2026-03-15',
+            '14:00:00',
+            '17:00:00',
+            '東京・大手町サンケイプラザ',
+            50,
+            DATE '2026-03-10',
+            published_status_id,
+            NOW(),
+            true,
+            test_user_id
+        )
+        ON CONFLICT DO NOTHING;
+
+        -- テストイベント7: 2026年4月
+        INSERT INTO events (
+            id, title, body, thumbnail_url, event_date, start_time, end_time, venue, capacity,
+            cancel_deadline, status_id, publish_at, allow_guest, created_by
+        )
+        VALUES (
+            gen_random_uuid(),
+            'CEO倶楽部4月交流会（テスト）',
+            '<h1>CEO倶楽部4月交流会</h1><p>新年度のスタートを祝い、CEO倶楽部の交流会を開催いたします。会員の皆様との交流の場として、ぜひご参加ください。</p><h2>開催概要</h2><ul><li>日時: 2026年4月</li><li>場所: 東京・ホテルオークラ</li><li>定員: 80名</li></ul><h2>プログラム</h2><p>新年度のご挨拶、会員の皆様との交流、懇親会などを予定しております。</p><p><strong>お申し込みはお早めに！</strong></p>',
+            'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&h=600&fit=crop',
+            DATE '2026-04-15',
+            '18:00:00',
+            '21:00:00',
+            '東京・ホテルオークラ',
+            80,
+            DATE '2026-04-10',
+            published_status_id,
+            NOW(),
             true,
             test_user_id
         )

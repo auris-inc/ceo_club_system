@@ -26,9 +26,12 @@ export interface MemberStatus {
   description?: string;
 }
 
+export type CircleCategory = 'district' | 'club';
+
 export interface Circle {
   id: string;
   name: string;
+  category: CircleCategory;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -99,4 +102,3 @@ export interface EventWithApplication extends Event {
   hasApplied?: boolean;
   tags?: EventTag[];
 }
-

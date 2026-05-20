@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabaseService';
-import { requireAdminSession } from '../../_utils';
+import { requireAdminSession, validateCircleSelection } from '../../_utils';
 
 type CreateMemberBody = {
   email: string;
@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    await validateCircleSelection(body.circle_ids ?? []);
 
     let authUserId: string | null = null;
 

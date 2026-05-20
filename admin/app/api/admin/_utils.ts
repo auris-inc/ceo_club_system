@@ -50,4 +50,20 @@ export async function requireAdminSession(request: NextRequest): Promise<AdminSe
   };
 }
 
+// 地区会タグは会員あたり最大2つまで。指定された circle_ids が上限を超えていれば例外。
+export async function validateCircleSelection(circleIds: string[]): Promise<void> {
+  if (circleIds.length === 0) return;
 
+  const supabase = createServiceSupabase();
+  const { data, error } = await supabase
+    .from('circles')
+    .select('id, category')
+    .in('id', circleIds);
+
+  if (error) throw new Error('タグの検証に失敗しました');
+
+  const districtCount = (data ?? []).filter((c: any) => c.category === 'district').length;
+  if (districtCount > 2) {
+    throw new Error('地区会は最大2つまで選択できます');
+  }
+}

@@ -1,19 +1,62 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuthStore } from '../../stores/authStore';
+import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import type { CircleCategory } from '../../types';
+
+type UserCircle = {
+  id: string;
+  name: string;
+  category: CircleCategory;
+  sort_order: number;
+};
 
 export default function MemberScreen() {
   const { user, signOut } = useAuthStore();
+  const [userCircles, setUserCircles] = useState<UserCircle[]>([]);
 
   const handleSignOut = async () => {
     await signOut();
     router.replace('/(auth)/login');
   };
 
+  const fetchUserCircles = useCallback(async () => {
+    if (!user?.id) return;
+    const { data, error } = await supabase
+      .from('user_circles')
+      .select('circle:circles(id, name, category, sort_order)')
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Error fetching user circles:', error);
+      return;
+    }
+
+    const list = ((data ?? [])
+      .map((row: any) => row.circle)
+      .filter(Boolean) as UserCircle[])
+      .sort((a, b) => {
+        if (a.category !== b.category) return a.category === 'district' ? -1 : 1;
+        return a.sort_order - b.sort_order;
+      });
+    setUserCircles(list);
+  }, [user?.id]);
+
+  // 編集画面から戻ったとき最新化されるよう、フォーカス時に再取得
+  useFocusEffect(
+    useCallback(() => {
+      void fetchUserCircles();
+    }, [fetchUserCircles]),
+  );
+
   // 会員番号を生成（IDの最初の8文字を使用）
   const memberId = user?.id ? user.id.substring(0, 8).toUpperCase() : '';
+
+  const districtCircles = userCircles.filter((c) => c.category === 'district');
+  const clubCircles = userCircles.filter((c) => c.category === 'club');
 
   return (
     <ScrollView style={styles.container}>
@@ -81,6 +124,38 @@ export default function MemberScreen() {
                 <Text style={styles.value}>{user.company_name}</Text>
               </View>
             )}
+
+            {/* 会員タグ表示 */}
+            <View style={styles.profileSection}>
+              <Text style={styles.label}>地区会</Text>
+              {districtCircles.length === 0 ? (
+                <Text style={styles.emptyValue}>未設定</Text>
+              ) : (
+                <View style={styles.chipRow}>
+                  {districtCircles.map((c) => (
+                    <View key={c.id} style={[styles.chip, styles.chipDistrict]}>
+                      <Text style={styles.chipText}>{c.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.profileSection}>
+              <Text style={styles.label}>部活動</Text>
+              {clubCircles.length === 0 ? (
+                <Text style={styles.emptyValue}>未設定</Text>
+              ) : (
+                <View style={styles.chipRow}>
+                  {clubCircles.map((c) => (
+                    <View key={c.id} style={[styles.chip, styles.chipClub]}>
+                      <Text style={styles.chipText}>{c.name}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
             <TouchableOpacity
               style={styles.editButton}
               onPress={() => router.push('/(tabs)/member/edit')}
@@ -249,6 +324,31 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 16,
     color: '#333',
+    fontWeight: '500',
+  },
+  emptyValue: {
+    fontSize: 14,
+    color: '#999',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  chipDistrict: {
+    backgroundColor: '#dbeafe',
+  },
+  chipClub: {
+    backgroundColor: '#ede9fe',
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#243266',
     fontWeight: '500',
   },
   editButton: {

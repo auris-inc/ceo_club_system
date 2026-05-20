@@ -1,22 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import AdminLayout from '@/components/AdminLayout';
 
-export default function NewCirclePage() {
+type Category = 'district' | 'club';
+
+function NewCircleForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialCategory: Category =
+    searchParams.get('category') === 'district' ? 'district' : 'club';
+
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    category: Category;
+    sort_order: number;
+    is_active: boolean;
+  }>({
     name: '',
+    category: initialCategory,
     sort_order: 0,
     is_active: true,
   });
 
   useEffect(() => {
-    // セッション確認
     const session = localStorage.getItem('admin_session');
     if (!session) {
       router.push('/admin/login');
@@ -33,7 +45,7 @@ export default function NewCirclePage() {
 
       if (error) throw error;
 
-      alert('サークルを作成しました');
+      alert('タグを作成しました');
       router.push('/admin/circles');
     } catch (error: any) {
       alert('作成に失敗しました: ' + error.message);
@@ -47,15 +59,54 @@ export default function NewCirclePage() {
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-2xl font-bold mb-6" style={{ color: '#243266' }}>
-            新規サークル作成
+            新規タグ作成
           </h2>
 
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
-              {/* サークル名 */}
+              {/* カテゴリー */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  サークル名 <span className="text-gray-500">*</span>
+                  カテゴリー <span className="text-gray-500">*</span>
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="category"
+                      value="district"
+                      checked={formData.category === 'district'}
+                      onChange={() =>
+                        setFormData({ ...formData, category: 'district' })
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-900">
+                      地区会（会員は最大2つまで選択可）
+                    </span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="category"
+                      value="club"
+                      checked={formData.category === 'club'}
+                      onChange={() =>
+                        setFormData({ ...formData, category: 'club' })
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-900">
+                      部活動（上限なし）
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* タグ名 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  タグ名 <span className="text-gray-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -65,7 +116,7 @@ export default function NewCirclePage() {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900 bg-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#243266] focus:ring-offset-2"
-                  placeholder="サークル名を入力"
+                  placeholder="タグ名を入力"
                 />
               </div>
 
@@ -130,3 +181,10 @@ export default function NewCirclePage() {
   );
 }
 
+export default function NewCirclePage() {
+  return (
+    <Suspense fallback={<div>読み込み中...</div>}>
+      <NewCircleForm />
+    </Suspense>
+  );
+}

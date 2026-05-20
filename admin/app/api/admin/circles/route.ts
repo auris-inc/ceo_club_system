@@ -9,8 +9,9 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from('circles')
-      .select('id, name, is_active, sort_order')
+      .select('id, name, category, is_active, sort_order')
       .eq('is_active', true)
+      .order('category')
       .order('sort_order');
 
     if (error) throw error;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabaseService';
-import { requireAdminSession } from '../../_utils';
+import { requireAdminSession, validateCircleSelection } from '../../_utils';
 
 type PatchBody = Partial<{
   full_name: string;
@@ -89,6 +89,7 @@ export async function PATCH(
     }
 
     if (Array.isArray(body.circle_ids)) {
+      await validateCircleSelection(body.circle_ids);
       await supabase.from('user_circles').delete().eq('user_id', id);
       if (body.circle_ids.length > 0) {
         const inserts = body.circle_ids.map((circleId) => ({

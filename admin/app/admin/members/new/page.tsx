@@ -9,7 +9,9 @@ export default function NewMemberPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
-  const [circles, setCircles] = useState<{ id: string; name: string }[]>([]);
+  const [circles, setCircles] = useState<
+    { id: string; name: string; category: 'district' | 'club' }[]
+  >([]);
   const [selectedCircles, setSelectedCircles] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     email: '',
@@ -60,7 +62,13 @@ export default function NewMemberPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'サークル取得に失敗しました');
-      setCircles((json.circles || []).map((c: any) => ({ id: c.id, name: c.name })));
+      setCircles(
+        (json.circles || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          category: (c.category as 'district' | 'club') ?? 'club',
+        })),
+      );
     } catch (error) {
       console.error('Error fetching circles:', error);
     }
@@ -263,33 +271,91 @@ export default function NewMemberPage() {
               </div>
             </div>
 
-            {/* 所属サークル */}
-            <div>
-              <h2 className="text-xl font-bold mb-4" style={{ color: '#243266' }}>
-                所属サークル
-              </h2>
-              <div className="space-y-2">
-                {circles.map((circle) => (
-                  <label key={circle.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedCircles.includes(circle.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedCircles([...selectedCircles, circle.id]);
-                        } else {
-                          setSelectedCircles(
-                            selectedCircles.filter((id) => id !== circle.id)
+            {/* 会員タグ */}
+            {(() => {
+              const districtCircles = circles.filter((c) => c.category === 'district');
+              const clubCircles = circles.filter((c) => c.category === 'club');
+              const selectedDistrictCount = selectedCircles.filter((id) =>
+                districtCircles.some((c) => c.id === id),
+              ).length;
+
+              const toggleCircle = (
+                circle: { id: string; category: 'district' | 'club' },
+                checked: boolean,
+              ) => {
+                if (checked) {
+                  if (circle.category === 'district' && selectedDistrictCount >= 2) {
+                    alert('地区会は最大2つまで選択できます');
+                    return;
+                  }
+                  setSelectedCircles([...selectedCircles, circle.id]);
+                } else {
+                  setSelectedCircles(selectedCircles.filter((id) => id !== circle.id));
+                }
+              };
+
+              return (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-bold mb-2" style={{ color: '#243266' }}>
+                      地区会
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-3">
+                      オフィスやご自宅のご住所などゆかりのある地域2つまでお選びできます
+                    </p>
+                    {districtCircles.length === 0 ? (
+                      <p className="text-sm text-gray-400">地区会タグはまだ登録されていません</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {districtCircles.map((circle) => {
+                          const checked = selectedCircles.includes(circle.id);
+                          const disabled =
+                            !checked && selectedDistrictCount >= 2;
+                          return (
+                            <label
+                              key={circle.id}
+                              className={`flex items-center ${disabled ? 'opacity-50' : ''}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={disabled}
+                                onChange={(e) => toggleCircle(circle, e.target.checked)}
+                                className="mr-2"
+                              />
+                              <span className="text-gray-900">{circle.name}</span>
+                            </label>
                           );
-                        }
-                      }}
-                      className="mr-2"
-                    />
-                    <span>{circle.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl font-bold mb-2" style={{ color: '#243266' }}>
+                      部活動
+                    </h2>
+                    {clubCircles.length === 0 ? (
+                      <p className="text-sm text-gray-400">部活動タグはまだ登録されていません</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {clubCircles.map((circle) => (
+                          <label key={circle.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedCircles.includes(circle.id)}
+                              onChange={(e) => toggleCircle(circle, e.target.checked)}
+                              className="mr-2"
+                            />
+                            <span className="text-gray-900">{circle.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ボタン */}
             <div className="flex gap-4">
