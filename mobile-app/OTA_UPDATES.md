@@ -1,5 +1,8 @@
 # OTA 配信ガイド (EAS Update)
 
+<!-- last updated: 2026-05-20 -->
+
+
 App Store / Play Store の審査を経由せずに、JavaScript / アセットの変更を配信できます。
 
 ## チャネル設計
