@@ -7,3 +7,4 @@ node_modules
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
+mobile-app/assets_backup/
