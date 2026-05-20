@@ -7,12 +7,14 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "ios": {
         "simulator": true
       }
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "ios": {
         "simulator": false,
         "buildConfiguration": "Release"
@@ -23,6 +25,7 @@
     },
     "adhoc": {
       "distribution": "internal",
+      "channel": "adhoc",
       "ios": {
         "simulator": false,
         "buildConfiguration": "Release"
@@ -30,6 +33,7 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "ios": {
         "buildConfiguration": "Release"
       }
@@ -39,4 +43,3 @@
     "production": {}
   }
 }
-

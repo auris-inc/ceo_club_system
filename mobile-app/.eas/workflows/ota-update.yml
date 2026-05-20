@@ -1,0 +1,19 @@
+name: OTA Update (preview channel)
+
+# main ブランチに push されたら、preview チャネルへ OTA 配信する。
+# ローカル `eas update` は Fingerprint 不一致でサイレント失敗する場合があるため、
+# EAS Workflows (クラウド) で実行することでビルド環境と統一する。
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ota_update:
+    name: Publish update to preview channel
+    type: update
+    params:
+      branch: preview
+      platform: all
+      message: ${{ github.event.head_commit.message }}
