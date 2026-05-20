@@ -168,6 +168,10 @@ export default function MemberScreen() {
             >
               <Text style={styles.signOutButtonText}>ログアウト</Text>
             </TouchableOpacity>
+
+            <Text style={styles.versionText}>
+              v1.0.0 (2026-05-20 OTA #1)
+            </Text>
           </>
         )}
       </View>
@@ -373,6 +377,12 @@ const styles = StyleSheet.create({
   signOutButtonText: {
     color: '#666',
     fontSize: 16,
+  },
+  versionText: {
+    marginTop: 24,
+    textAlign: 'center',
+    fontSize: 11,
+    color: '#bbb',
   },
 });
 
