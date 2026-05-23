@@ -10,14 +10,12 @@ import {
   RefreshControl,
   TextInput,
   Modal,
-  Alert,
   Switch,
 } from 'react-native';
 import { useEventApplications, ApplicationFilters } from '../../hooks/useEventApplications';
 import { router } from 'expo-router';
 import { EventWithApplication } from '../../hooks/useEventApplications';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../lib/supabase';
 
 export default function HistoryScreen() {
   const [filters, setFilters] = useState<ApplicationFilters>({
@@ -34,7 +32,6 @@ export default function HistoryScreen() {
 
   const { events, loading, error, refetch } = useEventApplications(filters);
   const [refreshing, setRefreshing] = useState(false);
-  const [cancelling, setCancelling] = useState<string | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -88,59 +85,6 @@ export default function HistoryScreen() {
       pathname: '/(tabs)/events/[id]',
       params: { id: event.id },
     } as any);
-  };
-
-  const handleCancel = async (event: EventWithApplication) => {
-    if (!event.cancel_deadline) {
-      Alert.alert('エラー', 'このイベントはキャンセルできません');
-      return;
-    }
-
-    const deadline = new Date(event.cancel_deadline);
-    if (deadline < new Date()) {
-      Alert.alert('エラー', 'キャンセル期限を過ぎています');
-      return;
-    }
-
-    Alert.alert(
-      'キャンセル確認',
-      'イベントへの申し込みをキャンセルしますか？',
-      [
-        { text: 'いいえ', style: 'cancel' },
-        {
-          text: 'はい',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setCancelling(event.application.id);
-              const { error: cancelError } = await supabase
-                .from('event_applications')
-                .update({
-                  status: 'cancelled',
-                  cancelled_at: new Date().toISOString(),
-                })
-                .eq('id', event.application.id);
-
-              if (cancelError) throw cancelError;
-
-              await refetch();
-              Alert.alert('キャンセル完了', '申し込みをキャンセルしました');
-            } catch (err: any) {
-              console.error('Error cancelling application:', err);
-              Alert.alert('エラー', err.message || 'キャンセルに失敗しました');
-            } finally {
-              setCancelling(null);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const canCancel = (event: EventWithApplication) => {
-    if (!event.cancel_deadline) return false;
-    const deadline = new Date(event.cancel_deadline);
-    return deadline > new Date();
   };
 
   const currentYear = new Date().getFullYear();
@@ -224,9 +168,15 @@ export default function HistoryScreen() {
                     {event.start_time && ` ${formatTime(event.start_time)}`}
                     {event.end_time && ` - ${formatTime(event.end_time)}`}
                   </Text>
-                  <View style={styles.appliedBadge}>
-                    <Text style={styles.appliedBadgeText}>申込済</Text>
-                  </View>
+                  {event.application.status === 'attending' ? (
+                    <View style={[styles.statusBadge, styles.statusAttending]}>
+                      <Text style={styles.statusBadgeText}>参加</Text>
+                    </View>
+                  ) : event.application.status === 'undecided' ? (
+                    <View style={[styles.statusBadge, styles.statusUndecided]}>
+                      <Text style={styles.statusBadgeText}>調整中</Text>
+                    </View>
+                  ) : null}
                 </View>
                 <Text style={styles.eventTitle} numberOfLines={2}>
                   {event.title}
@@ -235,22 +185,6 @@ export default function HistoryScreen() {
                   <Text style={styles.eventVenue} numberOfLines={1}>
                     📍 {event.venue}
                   </Text>
-                )}
-                {canCancel(event) && (
-                  <TouchableOpacity
-                    style={styles.cancelButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleCancel(event);
-                    }}
-                    disabled={cancelling === event.application.id}
-                  >
-                    <Text style={styles.cancelButtonText}>
-                      {cancelling === event.application.id
-                        ? 'キャンセル中...'
-                        : 'キャンセル'}
-                    </Text>
-                  </TouchableOpacity>
                 )}
               </View>
             </TouchableOpacity>
@@ -512,17 +446,22 @@ const styles = StyleSheet.create({
     color: '#999',
     flex: 1,
   },
-  appliedBadge: {
-    backgroundColor: '#e8f5e9',
+  statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
     marginLeft: 8,
   },
-  appliedBadgeText: {
+  statusAttending: {
+    backgroundColor: '#e8f5e9',
+  },
+  statusUndecided: {
+    backgroundColor: '#fff8e1',
+  },
+  statusBadgeText: {
     fontSize: 10,
-    color: '#2e7d32',
-    fontWeight: '600',
+    color: '#243266',
+    fontWeight: '700',
   },
   eventTitle: {
     fontSize: 16,
@@ -535,20 +474,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 8,
-  },
-  cancelButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#f44336',
-    marginTop: 4,
-  },
-  cancelButtonText: {
-    fontSize: 12,
-    color: '#f44336',
-    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
